@@ -22,9 +22,9 @@ $all | ForEach-Object {
     $newOut = $tmp
     $copy = $true
   }
-
+  $name = $_.basename
+  write-host "Starting $name"
   if ($newOut) {
-
     # ensure output directory exists
     $dir = Split-Path $newOut
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
@@ -36,6 +36,6 @@ $all | ForEach-Object {
     }
   }
   $count++
-  $name = $_.basename
+  
   write-host "finished $name. Done with $count out of $numtot"
 }
