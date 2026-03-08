@@ -5,6 +5,9 @@ $out = (Resolve-Path ".\out").Path
 
 $all = Get-ChildItem -Path $base -Recurse -File
 $numtot = $all.count
+$count = 0
+$tmpFileName = ".\tmp.txt"
+New-Item -ItemType File -Force -Path $tmpFileName | Out-Null
 
 $all | ForEach-Object {
 
@@ -13,8 +16,10 @@ $all | ForEach-Object {
 
   $newOut = $null
   $copy = $false
+  $forNode = $false
   if ($_.Extension.ToLower() -eq ".heic") {
     $newOut = $tmp.Substring(0, $tmp.Length - 5) + ".jpg"
+    $forNode = $true
   }
   elseif ($_.Extension.ToLower() -eq ".mov") {
     $newOut = $tmp.Substring(0, $tmp.Length - 4) + ".mp4"
@@ -22,7 +27,7 @@ $all | ForEach-Object {
     $newOut = $tmp
     $copy = $true
   }
-  $name = $_.basename
+  $name = $_.fullname
   write-host "Starting $name"
   if ($newOut) {
     # ensure output directory exists
@@ -32,10 +37,18 @@ $all | ForEach-Object {
     if($copy){
       Copy-Item -Path $_.FullName -Destination $newOut
     }else{
-      ffmpeg -y -loglevel quiet -i $_.FullName $newOut 
+      if($forNode){
+        $tmpData = $_.FullName + "," + $newOut + "|"
+        Add-Content -Path $tmpFileName -Value $tmpData
+      }else{
+        ffmpeg -y -loglevel quiet -i $_.FullName $newOut
+      }
     }
   }
   $count++
   
   write-host "finished $name. Done with $count out of $numtot"
 }
+
+node index.js $tmpFileName
+rm $tmpFileName -force
