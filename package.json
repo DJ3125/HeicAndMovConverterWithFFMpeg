@@ -18,6 +18,8 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "heic-convert": "^2.1.0"
+    "exifreader": "^4.37.0",
+    "heic-convert": "^2.1.0",
+    "p-limit": "^7.3.0"
   }
 }
