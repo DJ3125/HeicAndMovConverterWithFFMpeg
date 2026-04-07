@@ -3,7 +3,7 @@ import convert from "heic-convert";
 import {resolve, extname} from "path";
 import {exec} from "child_process";
 import ExifReader from 'exifreader';
-import {convertHeic, terminateHeicProcessing} from "./heicHelpers.js";
+import {convertHeicOrFile, terminateHeicProcessing} from "./heicHelpers.js";
 import pLimit from 'p-limit';
 
 const limit = pLimit(700);
@@ -61,23 +61,21 @@ async function getDateMetadata(fileObj){
 
 async function createConversions({fileObj, date}){
   switch(extname(fileObj.name).toLowerCase()){
-    case ".heic":
-      return convertHeic({fileObj, date});
     case ".mov":
       break;
+    case ".heic":  
     default:
+      return convertHeicOrFile({fileObj, date});
   }
-
 }
 
 
 console.log("Started");
 getAndSortFiles().then(async (res)=>{
   console.log("Finished sorting");
-  return Promise.allSettled(res.heics.map(async (i)=>{
+  return Promise.allSettled(res.other.map(async (i)=>{
     return {date: await getDateMetadata(i), fileObj: i};
   }));
-  
 }).then(res=>{
   console.log("Finished getting dates");
   const promises = [];
@@ -87,7 +85,7 @@ getAndSortFiles().then(async (res)=>{
       console.warn(i.reason);
       continue;
     }
-    promises.push(limit(()=>createConversions(i.value)).catch(err=>console.log(err)).finally(()=>console.log(`Finished ${++numFinished}/${res.length}`)));
+    promises.push(createConversions(i.value).catch(err=>console.log(err)).finally(()=>console.log(`Finished ${++numFinished}/${res.length}`)));
   }
   return Promise.allSettled(promises);
 }).catch(err=>console.log(err)).finally(()=>{
