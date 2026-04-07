@@ -3,10 +3,10 @@ import convert from "heic-convert";
 import {resolve, extname} from "path";
 import {exec} from "child_process";
 import ExifReader from 'exifreader';
-import {convertHeic} from "./writeHelpers.js";
+import {convertHeic, terminateHeicProcessing} from "./heicHelpers.js";
 import pLimit from 'p-limit';
 
-const limit = pLimit(7);
+const limit = pLimit(700);
 
 
 async function getAndSortFiles(){
@@ -90,5 +90,8 @@ getAndSortFiles().then(async (res)=>{
     promises.push(limit(()=>createConversions(i.value)).catch(err=>console.log(err)).finally(()=>console.log(`Finished ${++numFinished}/${res.length}`)));
   }
   return Promise.allSettled(promises);
-}).catch(err=>console.log(err)).finally(()=>{console.log("shutting Down");});
+}).catch(err=>console.log(err)).finally(()=>{
+  console.log("shutting Down"); 
+  terminateHeicProcessing();
+});
 
