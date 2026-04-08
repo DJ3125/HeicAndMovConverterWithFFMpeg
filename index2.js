@@ -1,35 +1,20 @@
 import {readFile, writeFile, readdir} from "node:fs/promises";
 import convert from "heic-convert";
 import {resolve, extname} from "path";
-import {exec} from "child_process";
+//import {exec} from "child_process";
 import ExifReader from 'exifreader';
 import {convertHeicOrFile, terminateHeicProcessing} from "./heicHelpers.js";
-import pLimit from 'p-limit';
-
-const limit = pLimit(700);
+import {getMovDate, convertMov} from "./movHelper.js";
 
 
 async function getAndSortFiles(){
-  const allFiles = await readdir("./input", {withFileTypes: true, recursive: true});
-  const sortingObj = {
-    movs: [],
-    heics: [],
-    other: []
-  };
-  for(const i of allFiles){
+  const allItems = await readdir("./input", {withFileTypes: true, recursive: true});
+  const allFiles = [];
+  for(const i of allItems){
     if(!i.isFile()){continue;}
-    switch(extname(i.name).toLowerCase()){
-      case ".heic":
-        sortingObj.heics.push(i);
-        break; 
-      case ".mov":
-        sortingObj.movs.push(i);
-        break;
-      default:
-        sortingObj.other.push(i);
-    }
+    allFiles.push(i);
   }
-  return sortingObj;
+  return allFiles;
 }
 
 async function getDateMetadata(fileObj){
@@ -48,21 +33,17 @@ async function getDateMetadata(fileObj){
       date.setFullYear(arr[0]);
       return date;
     case ".mov":
-      return new Promise((resolve, reject) => {
-        exec(`ffprobe -v quiet -print_format json -show_format -show_streams "${pathLoc}"`, (err, stdout) => {
-        if (err) return reject(err);
-        resolve(new Date(JSON.parse(stdout).format.tags.creation_time));
-      });
-  });
+      const val = await getMovDate(pathLoc);
+      return val;
     default:
       return new Date();
   }
 }
 
-async function createConversions({fileObj, date}){
+function createConversions({fileObj, date}){
   switch(extname(fileObj.name).toLowerCase()){
     case ".mov":
-      break;
+      return convertMov({fileObj, date});
     case ".heic":  
     default:
       return convertHeicOrFile({fileObj, date});
@@ -73,7 +54,7 @@ async function createConversions({fileObj, date}){
 console.log("Started");
 getAndSortFiles().then(async (res)=>{
   console.log("Finished sorting");
-  return Promise.allSettled(res.other.map(async (i)=>{
+  return Promise.allSettled(res.map(async (i)=>{
     return {date: await getDateMetadata(i), fileObj: i};
   }));
 }).then(res=>{
