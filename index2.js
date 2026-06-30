@@ -25,7 +25,10 @@ async function getDateMetadata(fileObj){
     case ".jpg":
     case ".jpeg":
       const obj = await ExifReader.load(pathLoc);
-      const str = obj['DateTimeOriginal'].description;
+      const str = obj['DateTimeOriginal']?.description;
+      if(!str){
+        return new Date();
+      }
       const arr = str.substring(0, str.indexOf(" ")).split(":").map(i=>parseInt(i));
       const date = new Date();
       date.setDate(arr[2]);

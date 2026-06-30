@@ -3,6 +3,7 @@ import {resolve, extname} from "path";
 import {Worker} from "node:worker_threads";
 
 const heicQueue = [];
+const processingMap = new Map();
 let currentID = 0;
 const numThreads = 10;
 const heicThreads = [];
@@ -13,7 +14,18 @@ initialize();
 function initialize(){
   for(let i = 0; i < numThreads; i++){
     availableThreads.push(i);
-    heicThreads.push(new Worker("./heicThread.js", {workerData: {id: i}}));
+    const worker = new Worker("./heicThread.js", {workerData: {id: i}});
+    worker.on("message", ({bufferCompleted, completedID, threadNum, error, readyForNext})=>{
+      const obj = processingMap.get(completedID);
+      if(!obj){return;}
+      processingMap.delete(completedID);
+      if(!error){obj.resolve(bufferCompleted);}
+      else{obj.reject(error);}
+      if(!readyForNext){return;}
+      availableThreads.push(threadNum);
+      runThreadProcessing();
+    });
+    heicThreads.push(worker);
   }
 }
 
@@ -21,8 +33,9 @@ export async function terminateHeicProcessing(){
   for(const i of heicThreads){i.terminate();}
   heicThreads.splice(0, heicThreads.length);
   availableThreads.splice(0, availableThreads.length);
-  for(const i of heicQueue){i.reject("Heic Threads were terminated");}
+  for(const [_, i] of processingMap){i.reject("Heic Threads were terminated");}
   heicQueue.splice(0, heicQueue.length);
+  processingMap.clear();
 }
 
 export async function convertHeicOrFile({fileObj, date}){
@@ -38,7 +51,9 @@ export async function convertHeicOrFile({fileObj, date}){
 
 async function waitForThreadForHeic(buffer){
   const promise = new Promise((resolve, reject)=>{
-    heicQueue.push({buffer, resolve, reject});  
+    const heicID = currentID++;
+    processingMap.set(heicID, {buffer, resolve, reject});
+    heicQueue.push(heicID);  
   });
   runThreadProcessing();
   return promise;
@@ -48,15 +63,8 @@ async function runThreadProcessing(){
   if(heicQueue.length === 0){return;}
   if(availableThreads.length === 0){return;}
   const thread = heicThreads[availableThreads.pop()];
-  const heicID = currentID++;
-  const obj = heicQueue.pop();
-  thread.postMessage({heicID, buffer: obj.buffer});
-  thread.on("message", ({bufferCompleted, completedID, threadNum, error, readyForNext})=>{
-    if(completedID !== heicID){return;}
-    if(!error){obj.resolve(bufferCompleted);}
-    else{obj.reject(err);}
-    if(!readyForNext){return;}
-    availableThreads.push(threadNum);
-    runThreadProcessing();
-  });
+  const heicID = heicQueue.pop();
+  const obj = processingMap.get(heicID);
+  thread.postMessage({heicID, buffer: obj.buffer}, [obj.buffer.buffer]);
+  obj.buffer = null;
 }
